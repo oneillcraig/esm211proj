@@ -1,0 +1,1199 @@
+---
+title: "SFL Lakes Trends"
+author: "Craig"
+date: "February 2, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(reshape2)
+
+SFL_Lakes <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/PopulationTrends/SFL_Lakes.csv")
+
+sfl <- read.csv(choose.files())
+
+sfl$site <- as.factor(sfl$site)
+
+
+
+ggplot(sfl, aes(x = year, y = adult))+
+  geom_line(aes(color = site))
+```
+
+Take Population Averages if Multiple Surveys Were Conducted Within a Year
+
+```{r}
+sfl_adult <- aggregate(adult~ year + site, data = sfl, mean)
+
+sfl_tadpole <- aggregate(tadpole~ year + site, data = sfl, mean)
+
+sfl_subadult <- aggregate(subadult~ year + site, data = sfl, mean)
+
+sfl_water <- aggregate(water~ year + site, data = sfl, mean)
+
+sfl2 <- data.frame(c(sfl_adult, sfl_subadult, sfl_tadpole)) %>% 
+  select(site, year, adult, subadult, tadpole)
+
+
+
+```
+
+#Saving the Site-Level Data
+Need to re-add site information, but that should be simple.  Maybe I can select just site-specific information and make a dataframe based upon unique sites.
+
+Lets try it
+
+```{r}
+
+sfl3 <- sfl %>% 
+  select(site, cell, fish, depth, elev, basin)
+sfl3 <- subset(sfl3, !duplicated(site))
+
+sfl4 <- subset(sfl, !duplicated(site)) %>% 
+  select(site, cell, fish, depth, elev, basin)
+
+sfl5 <- merge(sfl_adult, sfl4, by = "site")
+
+
+```
+
+The above works to subset the data by the common lake characteristics (site, cell, fish, depth, elev, basin).  These characteristics do not change throughout the survey period.
+
+Next I remove duplicate listings of site information.
+
+The merge function takes out adult observations and repopulates the line of the dataframe to include the additional site data for each survey-year.
+
+##Putting the Data Wrangling Together
+Next we can combine both sets of scripts to create our average population counts per year per lake:
+
+```{r}
+SFL_Lakes <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/PopulationTrends/SFL_Lakes.csv")
+
+sites <- SFL_Lakes %>%
+    select(site, cell, fish, depth, elev, basin)
+sites <- subset(sites, !duplicated(site))
+sites$site <- as.factor(sites$site)
+
+SFL_Lakes$site <- as.factor(SFL_Lakes$site)
+sfl_adult <- aggregate(adult~ year + site, data = SFL_Lakes, mean)
+sfl_tadpole <- aggregate(tadpole~ year + site, data = SFL_Lakes, mean)
+
+sfl_subadult <- aggregate(subadult~ year + site, data = SFL_Lakes, mean)
+
+sfl_water <- aggregate(water~ year + site, data = SFL_Lakes, mean)
+
+SFL_Lakes2 <- data.frame(c(sfl_adult, sfl_subadult, sfl_tadpole)) %>% 
+  select(site, year, adult, subadult, tadpole)
+SFL_Lakes2 <- merge(SFL_Lakes2, sites, by = "site")
+
+```
+
+##Graphing
+Now we can graph each population trend and split it by lakes
+
+```{r}
+ggplot(SFL_Lakes2, aes(x = year, y = adult))+
+  geom_line(aes(color = site))
+
+
+  facet_wrap(~stage)
+```
+
+##Stacking Data (This Part Works)
+
+One thing I see with this is that for easy graphing and data wrangling we should reorganize the data so you have the following headers:
+
+Site | Year | Count | LifeStage | etc...
+
+To do this we need to transform (stack?) the data from the columns of Adult/SubAdult/Tadpole.
+
+```{r}
+sfl_stack <- melt(sfl, id.var=c('X', 'site', 'cell', 'fish', 'depth', 'elev', 'basin', 'year', 'water', 'date'), variable.name = 'lifestage')
+sfl_stack$site <- as.factor(sfl_stack$site)
+
+```
+
+This script will stack ouur count data.  booyah.
+
+##Graphing it again (This Works)
+
+```{r}
+ggplot(sfl_stack, aes(x = year, y = value))+
+  geom_line(aes(color = site))+
+  facet_wrap(~lifestage, scales = "free_y")
+```
+
+##Data Wrangling the Entire Dataset
+
+This should run through the entire CSV.
+
+```{r}
+library(tidyverse)
+library(reshape2)
+
+sylf_survey <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/Species Overview/mylf/KnappsYLFData.csv")
+
+sites <- sylf_survey %>%
+    select(site, cell, fish, depth, elev, basin)
+sites <- subset(sites, !duplicated(site))
+sites$site <- as.factor(sites$site)
+
+sylf_survey$site <- as.factor(sylf_survey$site)
+sfl_adult <- aggregate(adult~ year + site, data = sylf_survey, mean)
+sfl_tadpole <- aggregate(tadpole~ year + site, data = sylf_survey, mean)
+sfl_subadult <- aggregate(subadult~ year + site, data = sylf_survey, mean)
+sfl_water <- aggregate(water~ year + site, data = sylf_survey, mean)
+
+sylf_survey2 <- data.frame(c(sfl_adult, sfl_subadult, sfl_tadpole, sfl_water)) %>% 
+  select(site, year, adult, subadult, tadpole, water)
+sylf_survey2 <- merge(sylf_survey2, sites, by = "site")
+
+sylf_stack <- melt(sylf_survey2, id.var=c('site', 'cell', 'fish', 'depth', 'elev', 'basin', 'year', 'water'), variable.name = 'lifestage')
+sylf_stack$site <- as.factor(sylf_stack$site)
+```
+
+##Population Trends per Site
+
+Goal 1:  Find out which Sites Were Surveyed over a lot of Years
+
+
+```{r}
+sites2 <- sylf_survey2 %>%
+    select(site)
+
+sites3 <- as.data.frame(table(sites2))
+colnames(sites3) <- c('site', 'freq')
+sites4 <- merge(sites3, sites, by = "site")
+write.csv(sites4, "~/2018 Winter/ESM 211 - Pop Ecology/Species Overview/mylf/sitefrew.csv")
+
+```
+
+Took the sites which contained at least 10 years of surveys and used Excel/Vlookup to create a new import file.  Data Wrangling to occur using that data now:
+
+```{r}
+library(tidyverse)
+library(reshape2)
+
+sylf_survey <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/PopulationTrends/Survey_Data_Analyzed.csv")
+
+sites <- sylf_survey %>%
+    select(site, cell, fish, depth, elev, basin)
+sites <- subset(sites, !duplicated(site))
+sites$site <- as.factor(sites$site)
+sites$site_ <- 1:nrow(sites)
+
+sylf_survey$site <- as.factor(sylf_survey$site)
+sfl_adult <- aggregate(adult~ year + site, data = sylf_survey, mean)
+sfl_tadpole <- aggregate(tadpole~ year + site, data = sylf_survey, mean)
+sfl_subadult <- aggregate(subadult~ year + site, data = sylf_survey, mean)
+sfl_water <- aggregate(water~ year + site, data = sylf_survey, mean)
+
+sylf_survey2 <- data.frame(c(sfl_adult, sfl_subadult, sfl_tadpole, sfl_water)) %>% 
+  select(site, year, adult, subadult, tadpole, water)
+sylf_survey2 <- merge(sylf_survey2, sites, by = "site")
+
+sylf_stack <- melt(sylf_survey2, id.var=c('site', 'cell', 'fish', 'depth', 'elev', 'basin', 'year', 'water'), variable.name = 'lifestage')
+sylf_stack$site <- as.factor(sylf_stack$site)
+```
+
+##Creating Population Trends for Each Site
+
+```{r}
+
+
+sylf_SF <- filter(sylf_stack, fish == "SF")
+ggplot(sylf_SF, aes(x = year, y = value))+
+  geom_line(aes(color = site))+
+  facet_wrap(~lifestage, scales = "free_y")
+
+
+sylf_SFL <- filter(sylf_stack, fish == "SFL")
+ggplot(sylf_SFL, aes(x = year, y = value))+
+  geom_line(aes(color = site))+
+  facet_wrap(~lifestage, scales = "free_y")
+
+
+sylf_No <- filter(sylf_stack, fish == "No")
+ggplot(sylf_No, aes(x = year, y = value))+
+  geom_line(aes(color = site))+
+  facet_wrap(~lifestage, scales = "free_y")
+
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site == "228") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+
+
+LogFrogols <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+LogFrogols
+test <- data.frame(LogFrogAbundance$site, LogFrogols$coefficients[1], LogFrogols$coefficients[2])
+
+LogFrogols$coefficients[2]
+```
+
+##Automating the Linear Regression Across All Sites
+```{r}
+siterow <- nrow(sites)
+
+lmmodels <- as.factor(siterow)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "2") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols2 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "3") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols3 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "4") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols4 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+#LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "5") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols5 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "6") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols6 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "7") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols7 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "8") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols8 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "9") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols9 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "10") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols10 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "11") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols11 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "12") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols12 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "13") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols13 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "14") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols14 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "15") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols15 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "16") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols16 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "17") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols17 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "18") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols18 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "19") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols19 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "20") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols20 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "21") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols21 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "22") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols22 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "23") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols23 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "24") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols24 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "25") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols25 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "26") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols26 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "27") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols27 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "28") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols28 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "29") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols29 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "30") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols30 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "31") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols31 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "32") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols32 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "33") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols33 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == "34") %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols34 <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+
+
+```
+
+Manually Doing This Shit
+```{r}
+Intercept1vect <- numeric(nrow(sites))
+Slope2vect <- numeric(nrow(sites))
+Intercept1vectSub <- numeric(nrow(sites))
+Slope2vectSub <- numeric(nrow(sites))
+Intercept1vectTad <- numeric(nrow(sites))
+Slope2vectTad <- numeric(nrow(sites))
+
+sitelist <- numeric(nrow(sites))
+sitelist[1] <- 1
+for (i in 1:nrow(sites)) {
+  sitelist[i+1] <- i+1
+}
+
+sitelist <- sitelist[-65]
+```
+
+
+
+```{r}
+site_v <- 20
+
+LogFrogAbundance <- sylf_survey2 %>% 
+  subset(site_ == site_v) %>%
+  subset(adult > 0) %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+Intercept1vect[site_v] <- LogFrogols$coefficients[1]
+Slope2vect[site_v] <- LogFrogols$coefficients[2]  
+
+LogFrogSubAdult <- sylf_survey2 %>% 
+  subset(site_ == site_v) %>%
+  subset(subadult > 0) %>% 
+  mutate(LogAbundanceSub = log(subadult))
+LogFrogols <- lm(LogAbundanceSub ~ year, data = LogFrogSubAdult)
+Intercept1vectSub[site_v] <- LogFrogols$coefficients[1]
+Slope2vectSub[site_v] <- LogFrogols$coefficients[2] 
+
+LogFrogTad <- sylf_survey2 %>% 
+  subset(site_ == site_v) %>%
+  subset(tadpole > 0) %>% 
+  mutate(LogAbundanceTad = log(tadpole))
+LogFrogols <- lm(LogAbundanceTad ~ year, data = LogFrogTad)
+Intercept1vectTad[site_v] <- LogFrogols$coefficients[1]
+Slope2vectTad[site_v] <- LogFrogols$coefficients[2] 
+
+
+```
+
+Join Vectors into a dataframe
+
+```{r}
+regresults <- data.frame(sitelist, Intercept1vect, Slope2vect, Intercept1vectSub, Slope2vectSub, Intercept1vectTad, Slope2vectTad)
+colnames(regresults) <- c("site_", "Adult_Inter", "Adult_r", "Sub_Inter", "Sub_r", "Tadpole_Inter", "Tadpole_r")
+regresults <- merge(regresults, sylf_survey2, by = "site_") %>% 
+  select(site, Adult_Inter, Adult_r, Sub_Inter, Sub_r, Tadpole_Inter, Tadpole_r, cell.x, fish.x, depth.x, elev.x, basin.x, water)
+regresults <- subset(regresults, !duplicated(site))
+
+write.csv(regresults, "regresionresults.csv")
+
+regresults <- as.factor(regresults$site)
+
+View(regresults)
+```
+
+##Log Abundance Investigation for Average Frog Counts Across All Lakes
+
+```{r}
+library(readxl)
+average_all_lakes <- read_excel("~/2018 Winter/ESM 211 - Pop Ecology/PopulationTrends/average_all_lakes.xlsx")
+
+Picked_Lakes <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/PopulationTrends/Picked_Lakes.csv")
+
+```
+
+#Average Across all Lakes That Were Surveyed at least Once for 5 Years
+
+```{r}
+
+LogFrogAbundance <- average_all_lakes %>% 
+  mutate(LogAbundance = log(adult))
+LogFrogols <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+Intercept1vect[site_v] <- LogFrogols$coefficients[1]
+Slope2vect[site_v] <- LogFrogols$coefficients[2]  
+summary(LogFrogols)
+
+
+LogFrogSubAdult <- average_all_lakes %>% 
+  mutate(LogAbundanceSub = log(subadult))
+LogSubFrogols <- lm(LogAbundanceSub ~ year, data = LogFrogSubAdult)
+summary(LogSubFrogols)
+Intercept1vectSub[site_v] <- LogSubFrogols$coefficients[1]
+Slope2vectSub[site_v] <- LogSubFrogols$coefficients[2] 
+
+LogFrogTad <- average_all_lakes %>% 
+  mutate(LogAbundanceTad = log(tadpole))
+LogTadols <- lm(LogAbundanceTad ~ year, data = LogFrogTad)
+Intercept1vectTad[site_v] <- LogTadols$coefficients[1]
+Slope2vectTad[site_v] <- LogTadols$coefficients[2] 
+summary(LogTadols)
+```
+
+#Conf Intervals
+```{r}
+confint(LogFrogols, level = 0.95)
+confint(LogSubFrogols, level = 0.95)
+confint(LogTadols, level = 0.95)
+```
+
+#Plotting the Data
+
+```{r}
+ggplot(LogFrogols, aes(x = year, y=LogAbundance))+
+  labs(x = "Years since 1993")+
+  labs(y = "Adult Log Abundance")+
+  labs(title = "Population Trend for Adult Sierra Yellow-legged Frog")+
+  labs(subtitle = "in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogSubFrogols, aes(x = year, y=LogAbundanceSub))+
+  labs(x = "Years since 1993")+
+  labs(y = "Subadult Log Abundance")+
+  labs(title = "Population Trend for Subadult Sierra Yellow-legged Frog")+
+  labs(subtitle = "in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogTadols, aes(x = year, y=LogAbundanceTad))+
+  labs(x = "Years since 1993")+
+  labs(y = "Tadpole Log Abundance")+
+  labs(title = "Population Trend for Tadpole Sierra Yellow-legged Frog")+
+  labs(subtitle = "in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+```
+
+#Estimating Log Growth Rate using Processing Error
+
+```{r}
+r_t_adult<-diff(log(average_all_lakes$adult))
+diff(log(LogFrogAbundance$adult))
+
+r_t_sub<-diff(log(average_all_lakes$subadult))
+diff(log(average_all_lakes$subadult))
+
+r_t_tad<-diff(log(average_all_lakes$tadpole))
+diff(log(average_all_lakes$tadpole))
+```
+
+#Mean Growth Rate
+
+```{r}
+mean(r_t_adult)
+mean(r_t_sub)
+mean(r_t_tad)
+```
+
+#Variance in Growth Rate
+```{r}
+var(r_t_adult)
+var(r_t_sub)
+var(r_t_tad)
+```
+
+#Standard Deviation
+```{r}
+sqrt(var(r_t_adult))
+sqrt(var(r_t_sub))
+sqrt(var(r_t_tad))
+```
+
+#TTest
+```{r}
+t.test(r_t_adult)
+t.test(r_t_sub)
+t.test(r_t_tad)
+```
+
+##Investigating the Total Abundance Across All Lakes
+
+```{r}
+library(readxl)
+average_all_lakes <- read_excel("~/2018 Winter/ESM 211 - Pop Ecology/PopulationTrends/average_all_lakes.xlsx")
+
+Picked_Lakes <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/PopulationTrends/Picked_Lakes.csv")
+
+```
+
+#Average Across all Lakes That Were Surveyed at least Once for 5 Years
+
+```{r}
+
+LogFrogAbundance <- average_all_lakes
+LogFrogols <- lm(adult ~ year, data = LogFrogAbundance)
+summary(LogFrogols)
+
+
+LogFrogSubAdult <- average_all_lakes
+LogSubFrogols <- lm(subadult ~ year, data = LogFrogSubAdult)
+summary(LogSubFrogols)
+
+LogFrogTad <- average_all_lakes
+LogTadols <- lm(tadpole ~ year, data = LogFrogTad)
+summary(LogTadols)
+```
+
+#Conf Intervals
+```{r}
+confint(LogFrogols, level = 0.95)
+confint(LogSubFrogols, level = 0.95)
+confint(LogTadols, level = 0.95)
+```
+
+#Plotting the Data
+
+```{r}
+ggplot(LogFrogols, aes(x = year, y=adult))+
+  labs(x = "Years since 1993")+
+  labs(y = "Adult Abundance")+
+  labs(title = "Population Trend for Adult Sierra Yellow-legged Frog")+
+  labs(subtitle = "in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogSubFrogols, aes(x = year, y=subadult))+
+  labs(x = "Years since 1993")+
+  labs(y = "Subadult Abundance")+
+  labs(title = "Population Trend for Subadult Sierra Yellow-legged Frog")+
+  labs(subtitle = "in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogTadols, aes(x = year, y=tadpole))+
+  labs(x = "Years since 1993")+
+  labs(y = "Tadpole Abundance")+
+  labs(title = "Population Trend for Tadpole Sierra Yellow-legged Frog")+
+  labs(subtitle = "in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+```
+
+##GAM Modelling
+```{r}
+library(mgcv)
+froggam_adult <- gam(adult~s(year), data=average_all_lakes)
+summary(froggam_adult)
+
+ggplot(average_all_lakes, aes(x = year, y=adult))+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+```
+
+##Aggregating Data Across all Surveys and Years
+This includes lakes that may have only been surveyed Once in a 20 year period.
+```{r}
+KnappsYLFData <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/Species Overview/mylf/KnappsYLFData.csv")
+
+SFLData <- KnappsYLFData %>% 
+  subset(fish == "SFL")
+
+adult_sfl <- aggregate(adult~ year, data = SFLData, mean)
+
+tadpole_sfl <- aggregate(tadpole~ year, data = SFLData, mean)
+
+subadult_sfl <- aggregate(subadult~ year, data = SFLData, mean)
+
+water_sfl <- aggregate(water~ year, data = SFLData, mean)
+
+SFLData <- data.frame(c(adult_, subadult_, tadpole_)) %>% 
+  select(year, adult, subadult, tadpole)
+colnames(SFLData) <-  c("year", "SFL_adult", "SFL_sub", "SFL_tadpole")
+
+SFData <- KnappsYLFData %>% 
+  subset(fish == "SF")
+
+adult_ <- aggregate(adult~ year, data = SFData, mean)
+
+tadpole_ <- aggregate(tadpole~ year, data = SFData, mean)
+
+subadult_ <- aggregate(subadult~ year, data = SFData, mean)
+
+water_ <- aggregate(water~ year, data = SFData, mean)
+
+SFData <- data.frame(c(adult_, subadult_, tadpole_)) %>% 
+  select(year, adult, subadult, tadpole)
+colnames(SFData) <-  c("year", "SF_adult", "SF_sub", "SF_tadpole")
+
+NOData <- KnappsYLFData %>% 
+  subset(fish == "No")
+
+adult_ <- aggregate(adult~ year, data = NOData, mean)
+
+tadpole_ <- aggregate(tadpole~ year, data = NOData, mean)
+
+subadult_ <- aggregate(subadult~ year, data = NOData, mean)
+
+water_ <- aggregate(water~ year, data = NOData, mean)
+
+NOData <- data.frame(c(adult_, subadult_, tadpole_)) %>% 
+  select(year, adult, subadult, tadpole)
+colnames(NOData) <-  c("year", "NO_adult", "NO_sub", "NO_tadpole")
+
+All_Lakes <- merge(SFLData, SFData, by = "year")
+All_Lakes <- merge(All_Lakes, NOData, by = "year")
+```
+
+All_Lakes has average counts per surveyed lake per year.  Now running the linear model across each life stage and each type of lake
+
+#SFL Lakes
+```{r}
+LogFrogAbundance <- All_Lakes %>% 
+  mutate(LogAbundance = log(SFL_adult)) %>% 
+  subset(LogAbundance != -Inf)
+LogFrogols <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+summary(LogFrogols)
+
+
+LogFrogSubAdult <- All_Lakes %>% 
+  mutate(LogAbundanceSub = log(SFL_sub))%>% 
+  subset(LogAbundanceSub != -Inf)
+LogSubFrogols <- lm(LogAbundanceSub ~ year, data = LogFrogSubAdult)
+summary(LogSubFrogols)
+
+LogFrogTad <- All_Lakes %>% 
+  mutate(LogAbundanceTad = log(SFL_tadpole))%>% 
+  subset(LogAbundanceTad != -Inf)
+LogTadols <- lm(LogAbundanceTad ~ year, data = LogFrogTad)
+summary(LogTadols)
+
+confint(LogFrogols, level = 0.95)
+confint(LogSubFrogols, level = 0.95)
+confint(LogTadols, level = 0.95)
+
+ggplot(LogFrogols, aes(x = year, y= LogAbundance))+
+  labs(x = "Years since 1993")+
+  labs(y = "Adult Abundance")+
+  labs(title = "Population Trend for Adult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for SFL Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogSubFrogols, aes(x = year, y=LogAbundanceSub))+
+  labs(x = "Years since 1993")+
+  labs(y = "Subadult Abundance")+
+  labs(title = "Population Trend for Subadult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for SFL Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogTadols, aes(x = year, y=LogAbundanceTad))+
+  labs(x = "Years since 1993")+
+  labs(y = "Tadpole Abundance")+
+  labs(title = "Population Trend for Tadpole Sierra Yellow-legged Frog")+
+  labs(subtitle = "for SFL Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+froggam_adult <- gam(SFL_adult~s(year), data=All_Lakes)
+summary(froggam_adult)
+
+ggplot(All_Lakes, aes(x = year, y=SFL_adult))+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+froggam_sub <- gam(SFL_sub~s(year), data=All_Lakes)
+summary(froggam_sub)
+
+ggplot(All_Lakes, aes(x = year, y=SFL_sub))+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+froggam_tadpole <- gam(SFL_tadpole~s(year), data=All_Lakes)
+summary(froggam_sub)
+
+ggplot(All_Lakes, aes(x = year, y=SFL_tadpole))+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+```
+#SF Lakes
+
+```{r}
+LogFrogAbundance <- All_Lakes %>% 
+  mutate(LogAbundance = log(SF_adult)) %>% 
+  subset(LogAbundance != -Inf)
+LogFrogols <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+summary(LogFrogols)
+
+
+LogFrogSubAdult <- All_Lakes %>% 
+  mutate(LogAbundanceSub = log(SF_sub))%>% 
+  subset(LogAbundanceSub != -Inf)
+LogSubFrogols <- lm(LogAbundanceSub ~ year, data = LogFrogSubAdult)
+summary(LogSubFrogols)
+
+LogFrogTad <- All_Lakes %>% 
+  mutate(LogAbundanceTad = log(SF_tadpole))%>% 
+  subset(LogAbundanceTad != -Inf)
+LogTadols <- lm(LogAbundanceTad ~ year, data = LogFrogTad)
+summary(LogTadols)
+
+confint(LogFrogols, level = 0.95)
+confint(LogSubFrogols, level = 0.95)
+confint(LogTadols, level = 0.95)
+
+ggplot(LogFrogols, aes(x = year, y= LogAbundance))+
+  labs(x = "Years since 1993")+
+  labs(y = "Adult Abundance")+
+  labs(title = "Population Trend for Adult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for SF Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogSubFrogols, aes(x = year, y=LogAbundanceSub))+
+  labs(x = "Years since 1993")+
+  labs(y = "Subadult Abundance")+
+  labs(title = "Population Trend for Subadult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for SF Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogTadols, aes(x = year, y=LogAbundanceTad))+
+  labs(x = "Years since 1993")+
+  labs(y = "Tadpole Abundance")+
+  labs(title = "Population Trend for Tadpole Sierra Yellow-legged Frog")+
+  labs(subtitle = "for SF Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+froggam_adult <- gam(SF_adult~s(year), data=All_Lakes)
+summary(froggam_adult)
+
+ggplot(All_Lakes, aes(x = year, y=SF_adult))+
+  labs(x = "Years since 1993")+
+  labs(y = "Adult Abundance")+
+  labs(title = "Population Trend for Adult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for SF Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+froggam_sub <- gam(SF_sub~s(year), data=All_Lakes)
+summary(froggam_sub)
+
+ggplot(All_Lakes, aes(x = year, y=SF_sub))+
+  labs(x = "Years since 1993")+
+  labs(y = "Subadult Abundance")+
+  labs(title = "Population Trend for Subadult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for SF Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+froggam_tadpole <- gam(SF_tadpole~s(year), data=All_Lakes)
+summary(froggam_sub)
+
+ggplot(All_Lakes, aes(x = year, y=SF_tadpole))+
+  labs(x = "Years since 1993")+
+  labs(y = "Tadpole Abundance")+
+  labs(title = "Population Trend for Tadpole Sierra Yellow-legged Frog")+
+  labs(subtitle = "for SF Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+```
+
+#NO Fish Lakes
+
+```{r}
+LogFrogAbundance <- All_Lakes %>% 
+  mutate(LogAbundance = log(NO_adult)) %>% 
+  subset(LogAbundance != -Inf)
+LogFrogols <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+summary(LogFrogols)
+
+
+LogFrogSubAdult <- All_Lakes %>% 
+  mutate(LogAbundanceSub = log(NO_sub))%>% 
+  subset(LogAbundanceSub != -Inf)
+LogSubFrogols <- lm(LogAbundanceSub ~ year, data = LogFrogSubAdult)
+summary(LogSubFrogols)
+
+LogFrogTad <- All_Lakes %>% 
+  mutate(LogAbundanceTad = log(NO_tadpole))%>% 
+  subset(LogAbundanceTad != -Inf)
+LogTadols <- lm(LogAbundanceTad ~ year, data = LogFrogTad)
+summary(LogTadols)
+
+confint(LogFrogols, level = 0.95)
+confint(LogSubFrogols, level = 0.95)
+confint(LogTadols, level = 0.95)
+
+ggplot(LogFrogols, aes(x = year, y= LogAbundance))+
+  labs(x = "Years since 1993")+
+  labs(y = "Adult Abundance")+
+  labs(title = "Population Trend for Adult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for Fishless Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogSubFrogols, aes(x = year, y=LogAbundanceSub))+
+  labs(x = "Years since 1993")+
+  labs(y = "Subadult Abundance")+
+  labs(title = "Population Trend for Subadult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for Fishless Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogTadols, aes(x = year, y=LogAbundanceTad))+
+  labs(x = "Years since 1993")+
+  labs(y = "Tadpole Abundance")+
+  labs(title = "Population Trend for Tadpole Sierra Yellow-legged Frog")+
+  labs(subtitle = "for Fishless Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+froggam_adult <- gam(NO_adult~s(year), data=All_Lakes)
+summary(froggam_adult)
+
+ggplot(All_Lakes, aes(x = year, y=NO_adult))+
+  labs(x = "Years since 1993")+
+  labs(y = "Adult Abundance")+
+  labs(title = "Population Trend for Adult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for Fishless Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+froggam_sub <- gam(NO_sub~s(year), data=All_Lakes)
+summary(froggam_sub)
+
+ggplot(All_Lakes, aes(x = year, y=NO_sub))+
+  labs(x = "Years since 1993")+
+  labs(y = "Subadult Abundance")+
+  labs(title = "Population Trend for Subadult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for Fishless Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+froggam_tadpole <- gam(NO_tadpole~s(year), data=All_Lakes)
+summary(froggam_tadpole)
+
+ggplot(All_Lakes, aes(x = year, y=NO_tadpole))+
+  labs(x = "Years since 1993")+
+  labs(y = "Tadpole Abundance")+
+  labs(title = "Population Trend for Tadpole Sierra Yellow-legged Frog")+
+  labs(subtitle = "for Fishless Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+```
+
+#All Lakes, All Surveys
+```{r}
+KnappsYLFData <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/Species Overview/mylf/KnappsYLFData.csv")
+
+adult_ <- aggregate(adult~ year, data = KnappsYLFData, mean)
+tadpole_ <- aggregate(tadpole~ year, data = KnappsYLFData, mean)
+subadult_ <- aggregate(subadult~ year, data = KnappsYLFData, mean)
+water_ <- aggregate(water~ year, data = KnappsYLFData, mean)
+
+All_Surveys <- merge(adult_, subadult_, by = "year")
+All_Surveys <- merge(All_Surveys, tadpole_, by = "year")
+All_Surveys <- merge(All_Surveys, water_, by = "year")
+
+LogFrogAbundance <- All_Surveys %>% 
+  mutate(LogAbundance = log(adult)) %>% 
+  subset(LogAbundance != -Inf)
+LogFrogols <- lm(LogAbundance ~ year, data = LogFrogAbundance)
+summary(LogFrogols)
+
+
+LogFrogSubAdult <- All_Surveys %>% 
+  mutate(LogAbundanceSub = log(subadult))%>% 
+  subset(LogAbundanceSub != -Inf)
+LogSubFrogols <- lm(LogAbundanceSub ~ year, data = LogFrogSubAdult)
+summary(LogSubFrogols)
+
+LogFrogTad <- All_Surveys %>% 
+  mutate(LogAbundanceTad = log(tadpole))%>% 
+  subset(LogAbundanceTad != -Inf)
+LogTadols <- lm(LogAbundanceTad ~ year, data = LogFrogTad)
+summary(LogTadols)
+
+confint(LogFrogols, level = 0.95)
+confint(LogSubFrogols, level = 0.95)
+confint(LogTadols, level = 0.95)
+
+ggplot(LogFrogols, aes(x = year, y= LogAbundance))+
+  labs(x = "Years since 1993")+
+  labs(y = "Adult Abundance")+
+  labs(title = "Population Trend for Adult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for All Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogSubFrogols, aes(x = year, y=LogAbundanceSub))+
+  labs(x = "Years since 1993")+
+  labs(y = "Subadult Abundance")+
+  labs(title = "Population Trend for Subadult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for All Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+ggplot(LogTadols, aes(x = year, y=LogAbundanceTad))+
+  labs(x = "Years since 1993")+
+  labs(y = "Tadpole Abundance")+
+  labs(title = "Population Trend for Tadpole Sierra Yellow-legged Frog")+
+  labs(subtitle = "for All Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method = "lm", fullrange=TRUE)
+
+froggam_adult <- gam(adult~s(year), data=All_Surveys)
+summary(froggam_adult)
+
+ggplot(All_Surveys, aes(x = year, y=adult))+
+  labs(x = "Years since 1993")+
+  labs(y = "Adult Abundance")+
+  labs(title = "Population Trend for Adult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for All Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+froggam_sub <- gam(subadult~s(year), data=All_Surveys)
+summary(froggam_sub)
+
+ggplot(All_Surveys, aes(x = year, y=subadult))+
+  labs(x = "Years since 1993")+
+  labs(y = "Subadult Abundance")+
+  labs(title = "Population Trend for Subadult Sierra Yellow-legged Frog")+
+  labs(subtitle = "for All Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+
+froggam_tadpole <- gam(tadpole~s(year), data=All_Surveys)
+summary(froggam_tadpole)
+
+ggplot(All_Surveys, aes(x = year, y=tadpole))+
+  labs(x = "Years since 1993")+
+  labs(y = "Tadpole Abundance")+
+  labs(title = "Population Trend for Tadpole Sierra Yellow-legged Frog")+
+  labs(subtitle = "for All Lakes in Yosemite National Park")+
+  geom_point()+
+  geom_smooth(method = "gam", formula=y~s(x))
+```
+
+##Estimating Growth Rates with Missing Years
+
+Subsetting the data to just look at the lakes/surveys which have at least 1 frog found in it.
+```{r}
+devtools::install_github("brucekendall/PVA")
+library(PVA)
+
+help(estimate_SEG_params) #this is the function we're using
+
+KnappsYLFData <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/Species Overview/mylf/KnappsYLFData.csv")
+
+SFLAdult <- KnappsYLFData %>% 
+  subset(select(site == Adult_vec))
+  
+Lakes_Adult <- aggregate(adult~site, SFLAdult, sum) %>% 
+  subset(adult != 0)
+
+Adult_vec <- Lakes_Adult$site
+
+FrogLake <- KnappsYLFData[KnappsYLFData$site %in% Lakes_Adult$site,]
+```
+
+Finding the r-bar for each lake
+```{r}
+#est_SEG_wrapper <- function(x) {
+  #print(x)
+  #if(nrow(x) == 1) {
+    #return(NA)
+  #} else {
+   # temp <- estimate_SEG_params(x$adult, x$year)
+    #return(data.frame(mu = temp$mu, SE = sqrt(temp$sigma2/(nrow(x)-1))))
+  #}
+#}
+
+FrogLake_agg <- aggregate(adult~ year+site, data = FrogLake, mean) # Aggregate the surveys to account for multiple surveys for the same lake in the same year.  We are taking the average counts for adults when this occurs.
+#agg_form <- function(x, formula, FUN) aggregate(formula, data = x, FUN = FUN)
+
+R_Adults <- FrogLake_agg %>% #Select the FrogLake_Agg
+  subset(adult != 0) %>% #Remove any datapoints where no frogs were found
+  group_by(site) %>%  #group by the site (lake)
+  filter(n() > 2) %>% #Remove any sites which were surveyed for 2 or less years times during the 20 years
+  summarise(mu = estimate_SEG_params(adult, year)$mu, #calculate the mu for adults
+            SE = sqrt(estimate_SEG_params(adult, year)$sigma2/(n()-1))) #calculate the standard error for adults for each site
+
+
+R_Adult_Lake <- merge.data.frame(KnappsYLFData, R_Adults, by = "site") #Remerge dataframe so I can get the other lake qualities
+
+
+R_Adult_Lake$basin <- as.factor(R_Adult_Lake$basin)
+
+R_Adult_Lake <- R_Adult_Lake %>% 
+  mutate(Weight = 1/(SE^2))
+
+#R_lm <- R_Adult_Lake %>% 
+  #group_by(site) %>% 
+  #summarise
+    
+
+R1 <- lm(data = R_Adult_Lake, mu ~ depth + elev + basin + fish, weights=Weight) #LM on the growth rate of frogs based on lake characteristics, weight is 1/SE^2 as suggested by Bruce.  This is th
+
+summary(R1)
+
+  #agg_form(formula = adult~year+site, FUN = mean) %>% 
+
+
+#SEG[i+1]<-estimate_SEG_params(Nt = R_Adults$adult, Yeart = R_Adults$year)
+
+```
+
+
+
+```{r}
+
+
+
+adult_sfl <- aggregate(adult~ year, data = SFLData, mean)
+
+plot(adult_sfl$year, adult_sfl$adult)
+
+estimate_SEG_params(Nt = adult_sfl$adult, Yeart = adult_sfl$year)
+
+number_of_ts <- 10 #Input
+N_0 <- 300 #Input
+
+N_tp1 <- numeric(number_of_ts+1)
+N_tp1[1] <- N_0 #Initial Population Size
+for (i in 1:number_of_ts) {
+  N_tp1[i+1] <- N_tp1[i]*exp(r*(1-(N_tp1[i]/K)))
+}
+```
+

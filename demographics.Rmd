@@ -1,0 +1,150 @@
+---
+title: "Demographic Analysis"
+author: "Craig O'Neill"
+date: "February 28, 2018"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+devtools::install_github("brucekendall/PVA")
+library(PVA)
+library(tidyverse)
+library(popbio)
+library(primer)
+```
+
+##Step 1 Create Demographic Matrix
+
+For the demographic matrix I am using a pre-breeding survey.  The three stages that I am using are Tadpoles, Subadult, and Adult.  Due to the semi-recent reclassification of the Yosemite population of the Yellow-Legged Frogs into it's own distinct species, some of my data comes from studies done on Mountain Yellow-Legged Frogs (R. muscosa) rather than the Sierrian Yellow-Legged Frogs (R. Sierran).
+
+For this demographic analysis I am only looking at breeding females.  The sex ratio for this species has been observed as 1:1 (MYLF Conservation Assessment), and sex is determined at fertilization, with no environmental impacts affecting the sex determination.  Therefore I am assuming that 0.5 * Eggs laid will be females.
+
+The tadpole stage is includes the egg stage in the lifecycle (since the egg stage is very short).  Subadults include recently metamorphed tadpoles, up until the frog reaches breeding size at approximately 40mm svl (snout/vent length).  Adults reach maturity after approximately 1-2 years after metamorphisis (Source).
+
+Studies have shown that a significantly large portion (99-98%) of fertilized eggs hatch into tadpoles (Source) after 18-20 days.  Tadpole metamorphosis occurs between 1-2.5 years.  I was not able to find specific data regarding the probability of whether tadpoles metamorphosis occurs after Year 1, or Year 2, however it appears from literature for higher elevation Mountain Yellow Legged Frogs (ie the population of interest in Yosemite National Park) they tend to take 2 years.  To account for this,  I am assuming that there is  60% chance that a tadpole remains as a tadpole after 1 year.
+
+Survivorship of tadpoles into Subadults is relatively low.  I could not find specific numbers for the Mountain Yellow-Legged Frogs, however found studies indicating that approximately 1-5% of tadpoles survive metamorphisis and become subadults across a variety of frog species (Source).  For this analysis, I am assuming the lowest survivalship rate of 1%.
+
+Subadult frogs typically progress into breeding adults after 1 year, however some may remain as subadults for a second year.  I could not find any studies that clearly determined what proportion of subadults remain as subadults for a multiple year, but I have assumed it to be very small (10%).  Mortallity of subadults is also very high, with only approximately 20% reaching the adult stage(MYLF Conservation Assessment), this is likely due to how metabollically expensive it is for the tadpole to complete metamorphisis, and the risk associated with being a smaller frog.  These frogs are known to engage in canabalization, and being a subadult increases likelyhood of being eaten by a larger adult.
+
+Adults, in comparison, have been found to have fairly high estimates.  One assessment claims that over 90% of adults survive year to year, with other estimates suggesting between 56% and 86% (Source, Source).  For this project I took the median value of 70%.
+
+Reproduction only occurs in the adult stage.  Breeding occurs within a distinct seasonal time period and female frogs only lay one egg mass per year.  Eggmasses on average contain 150 to 300 eggs(Source).  For this assessment I have assumed that 225 eggs on average are laid.  
+
+Breeding is constrained by the number of available females, so therefore this demographic analysis will only be looking at female population numbers.  The sex ratio for this frog has been observed as 1:1 (MYLF Conservation Assessment), and I have found no indication that environmental factors contribute to whether or not an egg is female or not, so therefore I have assumed that half of the laid eggs will be female (112).  A personal conversation with a herpatologist confirmed that for this species that would be a decent enough estimation (Conversation, Emily).
+
+
+```{r}
+class_names <- c("Tadpole", "Subadult", "Adult")
+A <- matrix(c(0.6,      0,     16.128,
+              0.004, 0.25,       0,
+              0,     0.15,       0.70),
+            nrow = 3, ncol = 3, byrow = TRUE, dimnames = list(class_names, class_names))
+```
+
+The model we are using is pre-breeding.  All subadults must first mature into adults before breeding can occur.  
+
+Due to time constraints this week, I used population count data from Survey Site 1764 to analyze the population demographics for the frog.  This lake is the most surveyed lakes (55 surveys over 20 years).  Following Knapp's methodology to account for multiple surveys within the same year for a single lake I averaged the population counts.  To build this model I set the starting population equal to the average abundance in the final year of the survey.
+
+```{r}
+n_0 <- c(278, 297, 2682)
+time <- 10
+
+pop <- pop.projection(A, n_0, iterations = time)
+pop
+
+stage.vector.plot(pop$stage.vector)
+
+stage.vector.plot(pop$stage.vector, log = "y")
+```
+
+##Sensitivity and Elasticity
+
+```{r}
+S <- DemoInfo(A)
+S
+```
+
+The asymptomatic growth rate for this species is showing decline, with a lambda of less than 1.
+
+According to our sensitivity analysis, the most sensitive life stage for the frogs exist for tadpoles becoming subadults.  Putting in management efforts to increase survivorship of this transition would have the greatest affect on the asymptomatic growth rate for the species.
+
+However, when we looked at the proportional effect that increasing survivorship has on increasing the asymptomatic growth rate using an elasticity analysis has shown that increasing adult survivor ship will have the greatest impact.  My assumption of this related to the biology of the species:  The number of eggs and tadpoles produced by each adult female, and the extreme levels of tadpole mortality, increasing the the number of breeding adults would have the greatest effect.
+
+##Investigating Sensitivity and Elasticity of Lambda to Vital Rates
+
+1.  Recreate the matrix symbolically
+
+```{r}
+A.vr <- expression((1-g0),           0,     (p2*g2*f1),
+                  (p0*g0), (p2*(1-g1)),              0,
+                        0,     (p2*g2),            p3)
+
+
+p <- c(1, 0.01, 0.2, 0.7)
+g <- c(0.4, 0.2, 0.75)
+f <- c(0, 0, 112)
+
+vr.vals <- list(p0 = p[1], p1 = p[2], p2 = p[3], p3 = p[4],
+                g0 = g[1], g1 = g[2], g2 = g[3],
+                f1 = f[3])
+
+vitalsens(A.vr, vr.vals)
+```
+
+From this analysis I can see that the greatest impact is shown in increasing the annual survivorship of subadults both in absolute (sensitivity) and proportional effort (elasticity).  This indicates that if I can get more subadults to survive, I would have the greatest increase in the asymptomatic growth rate.
+
+##Things missing from this model
+The obvious lack of data regarding lifestage survivorship and growth rates for the frog, which could drastically affect the asymptomatic growth rates and conclusions I have drawn from this analysis.  Considering the dataset that I am basing this project on has shown an overall increase in population size for the frogs in Yosemite National Park, yet my demographic analysis is indicating a decrease in asymptomatic growth rates shows that something is wrong in my assumptions.
+
+Another missing aspect of this model is that the model is not taking into account any form of density dependence.  From studying the ecology of the frog I can infer that this is a potentially huge failing, as the frogs will spatially distribute themselves along the shore of the lake to mark out preferential breeding territory.  At a certain point there would be too many frogs and not enough lake for them all to live in.  
+
+Environmental stochasticity is missing from this model, which greatly impacts the frog's development and survival.  Multiple "good" years could create a natural scenario where subadult survivorship grows, drastically increasing lambda for the population.  Environmental stochasiticity is most likely to impact the early life stages which would be particularly vulnerable to increased streamflow (which may cause increased mortallity to eggs or tadpoles due to eggmasses being scoured from the lakes or streams, though my population is in a lake so probably not that big of a deal).  Extreme cold winters would likely affect all populations equally if the cold weather is able to freeze the lake solid, preventing the frogs of all life stages from finding and hibernating in the refuge beneath the lake.
+
+
+##Updated Matrix Model
+```{r}
+class_names <- c( "Tadpole",  "Tadpole2", "Subadult", "Subadult2", "Adult")
+A <- matrix(c(            0,           0,       28.5,          15,     105,
+                      0.095,           0,          0,           0,       0,
+                      0.001,       0.095,          0,           0,       0,
+                          0,           0,        0.1,           0,       0,
+                          0,           0,       0.19,         0.1,     0.7 ),
+            nrow = 5, ncol = 5, byrow = TRUE, dimnames = list(class_names, class_names))
+
+```
+
+This model is based on the estimates for survival for each life stage.
+
+Tadpoles:  1% of tadpoles become adults.  However, tadpoles may overwinter multiple times (up to 3 overwinters, the first tadpole stage is after the first overwinter.  If a tadpole proceeds to Overwinter 2 they move to Tadpole2 stage.  Most tadpoles will overwinter twice indicating a higher probability that Tadpole2 will become a Subadult than a Tadpole1.)
+
+Subadult:  20% of subadults survive to become adults.  Subadults become adults after either 1 or 2 years.  
+
+Adults:  70% survivalship year to year
+
+I need to recalculate fecundintry
+
+```{r}
+n_0 <- c(278, 150, 150, 600, 2082)
+time <- 50
+
+pop <- pop.projection(A, n_0, iterations = time)
+pop
+
+stage.vector.plot(pop$stage.vector)
+
+stage.vector.plot(pop$stage.vector, log = "y")
+```
+
+Sensitivity
+```{r}
+S <- DemoInfo(A)
+S
+```
+
