@@ -131,7 +131,9 @@ Adults:  70% survivalship year to year
 I need to recalculate fecundintry
 
 ```{r}
-n_0 <- c(278, 150, 150, 600, 2082)
+#N-0 <- c(Adult, Subadult2, Subadult1, Tadpole2, Tadpole1) #The format for this vector
+n_0 <- c(278, 96, 200, 670, 670) #Site 1764
+n_0 <- c(35, 25, 86, 83, 83) #Site 1634
 time <- 50
 
 pop <- pop.projection(A, n_0, iterations = time)

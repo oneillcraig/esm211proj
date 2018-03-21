@@ -1112,18 +1112,19 @@ Subsetting the data to just look at the lakes/surveys which have at least 1 frog
 ```{r}
 devtools::install_github("brucekendall/PVA")
 library(PVA)
+library(tidyverse)
 
 help(estimate_SEG_params) #this is the function we're using
 
-KnappsYLFData <- read_csv("~/2018 Winter/ESM 211 - Pop Ecology/Species Overview/mylf/KnappsYLFData.csv")
+KnappsYLFData <- read_csv("KnappsYLFData.csv")
 
-SFLAdult <- KnappsYLFData %>% 
-  subset(select(site == Adult_vec))
-  
-Lakes_Adult <- aggregate(adult~site, SFLAdult, sum) %>% 
+Lakes_Adult <- aggregate(adult~site, KnappsYLFData, sum) %>% 
   subset(adult != 0)
 
 Adult_vec <- Lakes_Adult$site
+
+#SFLAdult <- KnappsYLFData %>% 
+  #subset(select(site == Adult_vec))
 
 FrogLake <- KnappsYLFData[KnappsYLFData$site %in% Lakes_Adult$site,]
 ```
@@ -1151,25 +1152,40 @@ R_Adults <- FrogLake_agg %>% #Select the FrogLake_Agg
             SE = sqrt(estimate_SEG_params(adult, year)$sigma2/(n()-1))) #calculate the standard error for adults for each site
 
 
+
 R_Adult_Lake <- merge.data.frame(KnappsYLFData, R_Adults, by = "site") #Remerge dataframe so I can get the other lake qualities
 
 
-R_Adult_Lake$basin <- as.factor(R_Adult_Lake$basin)
+#R_Adult_Lake$basin <- as.factor(R_Adult_Lake$basin) #Hashed out because I need to summarize by fish status, taking the mean of the basins.  Will factorize after.
 
-R_Adult_Lake <- R_Adult_Lake %>% 
-  mutate(Weight = 1/(SE^2))
+SFL_Adult_LakeSummary <- R_Adult_Lake %>% 
+  mutate(Weight = 1/(SE^2)) %>% 
+  group_by(site) %>% 
+  subset(fish = "SFL"()) %>% 
+  summarise(mu = mean(mu),
+            depth = mean(depth),
+            elev = mean(elev),
+            basin = mean(basin),
+            SE = mean(SE),
+            Weight = mean(Weight))
 
+SFL_Adult_LakeSummary$basin <- as.factor(SFL_Adult_LakeSummary$basin)
+
+SFL_Adult_LakeSummary <- SFL_Adult_LakeSummary %>% 
+  subset(Weight != "Inf") #remove inf weights
 #R_lm <- R_Adult_Lake %>% 
   #group_by(site) %>% 
   #summarise
     
-
-R1 <- lm(data = R_Adult_Lake, mu ~ depth + elev + basin + fish, weights=Weight) #LM on the growth rate of frogs based on lake characteristics, weight is 1/SE^2 as suggested by Bruce.  This is th
+R1 <- lm(data = SFL_Adult_LakeSummary, mu ~ depth + elev + basin, weights=Weight) #LM on the growth rate of frogs based on lake characteristics, weight is 1/SE^2 as suggested by Bruce.  This is th
 
 summary(R1)
 
+
+R2 <- lm(data = SFL_Adult_LakeSummary, mu ~ depth + elev + basin) #LM on the growth rate of frogs based on lake characteristics, weight is 1/SE^2 as suggested by Bruce.  This is th
   #agg_form(formula = adult~year+site, FUN = mean) %>% 
 
+summary(R2)
 
 #SEG[i+1]<-estimate_SEG_params(Nt = R_Adults$adult, Yeart = R_Adults$year)
 
