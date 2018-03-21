@@ -1,0 +1,83 @@
+---
+title: "New Trend Analysis"
+author: "Craig O'Neill"
+date: "March 21, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(PVA)
+library(reshape2)
+```
+
+##Get the Data
+```{r}
+KnappsYLFData <- read_csv("KnappsYLFData.csv") #original Dataset
+
+Lakes_Adult <- aggregate(adult~site, KnappsYLFData, sum) %>% 
+  subset(adult != 0)
+
+Adult_vec <- Lakes_Adult$site #List of sites with at least 1 frog found
+
+#SFLAdult <- KnappsYLFData %>% 
+  #subset(select(site == Adult_vec))
+
+FrogLake <- KnappsYLFData[KnappsYLFData$site %in% Lakes_Adult$site,]
+
+FrogLake_agg <- aggregate(adult~ year+site, data = FrogLake, mean) # Aggregate the surveys to account for multiple surveys for the same lake in the same year.  We are taking the average counts for adults when this occurs.
+
+Fish_Status <- KnappsYLFData %>% 
+  select(site, fish) %>% 
+  subset(!duplicated(site))
+
+
+```
+
+##Calculated Mu using SEG
+
+```{r}
+R_Adults <- FrogLake_agg %>% #Select the FrogLake_Agg
+  subset(adult != 0) %>% #Remove any datapoints where no frogs were found
+  group_by(site) %>%  #group by the site (lake)
+  filter(n() > 2) %>% #Remove any sites which were surveyed for 2 or less years times during the 20 years
+  summarise(mu = estimate_SEG_params(adult, year)$mu, #calculate the mu for adults
+            SE = sqrt(estimate_SEG_params(adult, year)$sigma2/(n()-1))) #calculate the standard error for adults for each site
+
+
+R_Adult_Lake <- merge.data.frame(KnappsYLFData, R_Adults, by = "site") #Remerge dataframe so I can get the other lake qualities
+
+
+Adult_LakeSummary <- R_Adult_Lake %>%  #Group and summarize per lake
+  mutate(Weight = 1/(SE^2)) %>% 
+  group_by(site) %>% 
+  summarise(mu = mean(mu),
+            depth = mean(depth),
+            elev = mean(elev),
+            basin = mean(basin),
+            SE = mean(SE),
+            cell= mean(cell),
+            Weight = mean(Weight))
+
+Adult_LakeSummary <- merge.data.frame(Fish_Status, Adult_LakeSummary, by = "site") #Add back in the fish status for each lake
+
+Adult_LakeSummary$basin <- as.factor(Adult_LakeSummary$basin) #set basin to factor
+Adult_LakeSummary$cell <- as.factor(Adult_LakeSummary$cell) #set cell to factor
+
+Adult_LakeSummary <- Adult_LakeSummary %>% 
+  subset(Weight != "Inf") #remove inf weights
+
+```
+
+##Linear Regression Characteristics to Mu
+```{r}
+R1 <- lm(data = Adult_LakeSummary, mu ~ depth + fish + cell, weights=Weight) #LM on the growth rate of frogs based on lake characteristics, weight is 1/SE^2 as suggested by Bruce.  This is th
+
+summary(R1)
+
+```
+
