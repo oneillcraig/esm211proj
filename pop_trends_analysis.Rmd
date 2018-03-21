@@ -2,7 +2,9 @@
 title: "New Trend Analysis"
 author: "Craig O'Neill"
 date: "March 21, 2018"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -67,6 +69,7 @@ Adult_LakeSummary <- merge.data.frame(Fish_Status, Adult_LakeSummary, by = "site
 
 Adult_LakeSummary$basin <- as.factor(Adult_LakeSummary$basin) #set basin to factor
 Adult_LakeSummary$cell <- as.factor(Adult_LakeSummary$cell) #set cell to factor
+Adult_LakeSummary$site <- as.factor(Adult_LakeSummary$site) #set cell to factor
 
 Adult_LakeSummary <- Adult_LakeSummary %>% 
   subset(Weight != "Inf") #remove inf weights
